@@ -2,6 +2,7 @@ using Infrastructure.Data;
 using Core.Entities;
 using Microsoft.Azure.Cosmos;
 using Microsoft.EntityFrameworkCore;
+using Core.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +36,8 @@ builder.Services.AddDbContext<StoreContext>(options =>
         });
 });
 
+builder.Services.AddScoped<IProductRepository, ProductsRepository>();
+
 // builder.Services.AddDbContext<StoreContext>(opt =>
 // {
 //     opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
@@ -51,7 +54,7 @@ using (var scope = app.Services.CreateScope())
 // Configure the HTTP request pipeline.
 
 #region minimal-api
-    // Minimal API endpoints to quickly test the DB connection (Cosmos via EF Core)
+// Minimal API endpoints to quickly test the DB connection (Cosmos via EF Core)
 // app.MapGet("/products", async (StoreContext db, CancellationToken ct) =>
 // {
 //     var items = await db.Products.AsNoTracking().ToListAsync(ct);
@@ -111,5 +114,19 @@ using (var scope = app.Services.CreateScope())
 
 // Keep attribute-routed controllers too (e.g., WeatherForecast)
 app.MapControllers();
+
+try
+{
+    // Seed data
+    using var scope = app.Services.CreateScope();
+    var services = scope.ServiceProvider;
+    var context = services.GetRequiredService<StoreContext>();
+    await StoreContextSeed.SeedAsync(context);
+}
+catch (Exception ex)
+{
+    Console.WriteLine(ex);
+    throw;
+}
 
 app.Run();

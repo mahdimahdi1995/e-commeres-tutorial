@@ -1,5 +1,6 @@
 using Core.Entities;
 using Infrastructure.Data;
+using Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,25 +8,19 @@ namespace API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ProductsController : ControllerBase
+public class ProductsController(IProductRepository repo) : ControllerBase
 {
-    private readonly StoreContext context;
-
-    public ProductsController(StoreContext context)
-    {
-        this.context = context;
-    }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
+    public async Task<ActionResult<IReadOnlyList<Product>>> GetProducts(string? brand = null, string? type = null, string? sort = null)
     {
-        return await context.Products.AsNoTracking().ToListAsync();
+        return Ok(await repo.GetProductsAsync(brand, type, sort));
     }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<Product>> GetProduct(int id)
     {
-        var product = await context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
+        var product = await repo.GetProductByIdAsync(id);
         if (product == null) return NotFound();
         return product;
     }
@@ -44,10 +39,13 @@ public class ProductsController : ControllerBase
         {
             product.PartitionKey = string.IsNullOrWhiteSpace(product.Brand) ? "product" : product.Brand;
         }
-        context.Products.Add(product);
-        await context.SaveChangesAsync();
+        repo.AddProduct(product);
+        if (await repo.SaveChangesAsync())
+        {
+            return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, product);
+        }
 
-        return product;
+        return BadRequest("Failed to create product.");
     }
 
     [HttpPut("{id:int}")]
@@ -57,27 +55,45 @@ public class ProductsController : ControllerBase
             return BadRequest("Mismatched id");
 
         // Load the existing doc (avoid Any/Exists; use FirstOrDefaultAsync)
-        var existing = await context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
+        var existing = await repo.GetProductByIdAsync(id);
         if (existing is null) return NotFound();
 
         // For Cosmos, avoid changing partition key (PartitionKey)
         if (!string.Equals(existing.PartitionKey, product.PartitionKey, StringComparison.Ordinal))
             return BadRequest("Changing PartitionKey is not supported.");
 
-        context.Entry(product).State = EntityState.Modified;
-        await context.SaveChangesAsync();
-        return NoContent();
+        repo.UpdateProduct(product);
+        if (await repo.SaveChangesAsync())
+        {
+            return NoContent();
+        }
+        return BadRequest("Failed to update product.");
     }
 
     [HttpDelete("{id:int}")]
     public async Task<ActionResult> DeleteProduct(int id)
     {
-        var product = await context.Products.FirstOrDefaultAsync(p => p.Id == id);
+        var product = await repo.GetProductByIdAsync(id);
         if (product == null) return NotFound();
-        context.Products.Remove(product);
-        await context.SaveChangesAsync();
-        return NoContent();
+        await repo.DeleteProductAsync(id);
+        if (await repo.SaveChangesAsync())
+        {
+            return NoContent();
+        }
+        return BadRequest("Failed to delete product.");
     }
 
-    // Removed ProductExists to avoid translation to EXISTS which is not supported by emulator vNext
+    [HttpGet("brands")]
+    public async Task<ActionResult<IReadOnlyList<string>>> GetBrands()
+    {
+        var brands = await repo.GetBrandsAsync();
+        return Ok(brands);
+    }
+
+    [HttpGet("types")]
+    public async Task<ActionResult<IReadOnlyList<string>>> GetTypes()
+    {
+        var types = await repo.GetTypesAsync();
+        return Ok(types);
+    }
 }
