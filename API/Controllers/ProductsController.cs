@@ -3,24 +3,26 @@ using Infrastructure.Data;
 using Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Core.Specifications;
 
 namespace API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ProductsController(IProductRepository repo) : ControllerBase
+public class ProductsController(IGenericRepository<Product> repo) : ControllerBase
 {
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<Product>>> GetProducts(string? brand = null, string? type = null, string? sort = null)
     {
-        return Ok(await repo.GetProductsAsync(brand, type, sort));
+        var spec = new ProductSpecification(brand, type, sort);
+        return Ok(await repo.ListAsync(spec));
     }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<Product>> GetProduct(int id)
     {
-        var product = await repo.GetProductByIdAsync(id);
+        var product = await repo.GetByIdAsync(id);
         if (product == null) return NotFound();
         return product;
     }
@@ -39,8 +41,8 @@ public class ProductsController(IProductRepository repo) : ControllerBase
         {
             product.PartitionKey = string.IsNullOrWhiteSpace(product.Brand) ? "product" : product.Brand;
         }
-        repo.AddProduct(product);
-        if (await repo.SaveChangesAsync())
+        repo.Add(product);
+        if (await repo.SaveAllAsync())
         {
             return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, product);
         }
@@ -55,15 +57,15 @@ public class ProductsController(IProductRepository repo) : ControllerBase
             return BadRequest("Mismatched id");
 
         // Load the existing doc (avoid Any/Exists; use FirstOrDefaultAsync)
-        var existing = await repo.GetProductByIdAsync(id);
+        var existing = await repo.GetByIdAsync(id);
         if (existing is null) return NotFound();
 
         // For Cosmos, avoid changing partition key (PartitionKey)
         if (!string.Equals(existing.PartitionKey, product.PartitionKey, StringComparison.Ordinal))
             return BadRequest("Changing PartitionKey is not supported.");
 
-        repo.UpdateProduct(product);
-        if (await repo.SaveChangesAsync())
+        repo.Update(product);
+        if (await repo.SaveAllAsync())
         {
             return NoContent();
         }
@@ -73,10 +75,10 @@ public class ProductsController(IProductRepository repo) : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<ActionResult> DeleteProduct(int id)
     {
-        var product = await repo.GetProductByIdAsync(id);
+        var product = await repo.GetByIdAsync(id);
         if (product == null) return NotFound();
-        await repo.DeleteProductAsync(id);
-        if (await repo.SaveChangesAsync())
+        await repo.Remove(product);
+        if (await repo.SaveAllAsync())
         {
             return NoContent();
         }
@@ -86,14 +88,16 @@ public class ProductsController(IProductRepository repo) : ControllerBase
     [HttpGet("brands")]
     public async Task<ActionResult<IReadOnlyList<string>>> GetBrands()
     {
-        var brands = await repo.GetBrandsAsync();
+        var spec = new BrandListSpecification();
+        var brands = await repo.ListAsync(spec);
         return Ok(brands);
     }
 
     [HttpGet("types")]
     public async Task<ActionResult<IReadOnlyList<string>>> GetTypes()
     {
-        var types = await repo.GetTypesAsync();
+        var spec = new TypeListSpecification();
+        var types = await repo.ListAsync(spec);
         return Ok(types);
     }
 }
