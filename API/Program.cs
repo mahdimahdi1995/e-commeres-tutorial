@@ -36,8 +36,30 @@ builder.Services.AddDbContext<StoreContext>(options =>
         });
 });
 
+// Register CosmosClient for SDK-based repository
+builder.Services.AddSingleton(sp =>
+{
+    var cfg = sp.GetRequiredService<IConfiguration>().GetSection("Cosmos");
+    var endpoint = cfg["AccountEndpoint"]!;
+    var key = cfg["AccountKey"]!;
+    var clientOptions = new CosmosClientOptions
+    {
+        ConnectionMode = Microsoft.Azure.Cosmos.ConnectionMode.Gateway,
+        LimitToEndpoint = true,
+        HttpClientFactory = () =>
+        {
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            };
+            return new HttpClient(handler);
+        }
+    };
+    return new CosmosClient(endpoint, key, clientOptions);
+});
+
 builder.Services.AddScoped<IProductRepository, ProductsRepository>();
-builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(CosmosGenericRepository<>));
 
 // builder.Services.AddDbContext<StoreContext>(opt =>
 // {

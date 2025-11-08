@@ -16,4 +16,8 @@ public interface IGenericRepository<T> where T : BaseEntity
     Task Remove(T entity);
     Task<bool> SaveAllAsync();
     bool Exists(int id);
+    Task<int> CountAsync(ISpecification<T> spec);
+
+    //test
+    Task<IReadOnlyList<T>> GetEntityByBrandsAndTypes();
 }

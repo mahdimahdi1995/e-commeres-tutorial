@@ -37,6 +37,7 @@ public class StoreContextSeed
                 {
                     p.PartitionKey = string.IsNullOrWhiteSpace(p.PartitionKey) ? "product" : p.PartitionKey;
                 }
+
             }
 
             await context.Products.AddRangeAsync(products);

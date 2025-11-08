@@ -27,6 +27,9 @@ public class StoreContext(DbContextOptions options) : DbContext(options)
             // Converting decimal->double avoids precision/serialization quirks in older providers.
             eb.Property(p => p.Price).HasConversion<double>();
 
+            // Map ProductType CLR property to JSON 'Type' field (matches seed/docs)
+            eb.Property(p => p.Type).ToJsonProperty("Type");
+
             // Create a simple index (logical in EF; Cosmos indexes by default, so this is mostly for LINQ clarity)
             eb.HasKey(p => p.Id);
         });

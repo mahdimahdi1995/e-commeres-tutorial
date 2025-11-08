@@ -14,11 +14,11 @@ namespace Infrastructure.Data;
 /// - Falls back to in-memory projection for TResult specs to keep implementation simple.
 /// - Assumes partition key property exists on entities (PartitionKey). For cross-partition queries, EnableCrossPartitionQuery=true.
 /// </summary>
-public class CosmosGenericRepository<T> : IGenericRepository<T> where T : BaseEntity
+public class GenericRepository<T> : IGenericRepository<T> where T : BaseEntity
 {
     private readonly Container _container;
 
-    public CosmosGenericRepository(CosmosClient client)
+    public GenericRepository(CosmosClient client)
     {
         // Infer container name from type, default to "Products" for Product
         var database = client.GetDatabase("AppDb"); // same as appsettings DatabaseName
@@ -207,6 +207,7 @@ public class CosmosGenericRepository<T> : IGenericRepository<T> where T : BaseEn
             query = query.Where(spec.Criteria);
         }
 
+        // Apply ordering if provided; otherwise a stable default
         if (spec.OrderBy != null)
         {
             query = query.OrderBy(spec.OrderBy);
@@ -215,17 +216,15 @@ public class CosmosGenericRepository<T> : IGenericRepository<T> where T : BaseEn
         {
             query = query.OrderByDescending(spec.OrderByDescending);
         }
+        else
+        {
+            query = query.OrderBy(e => e.Id);
+        }
 
-        // Apply paging if requested
+        // Apply paging when requested
         if (spec.IsPagingEnabled)
         {
             query = query.Skip(spec.Skip).Take(spec.Take);
-        }
-
-        // ensure a stable order if none provided
-        if (spec.OrderBy == null && spec.OrderByDescending == null)
-        {
-            query = query.OrderBy(e => e.Id);
         }
 
         return query;
@@ -251,21 +250,12 @@ public class CosmosGenericRepository<T> : IGenericRepository<T> where T : BaseEn
 
     public async Task<int> CountAsync(ISpecification<T> spec)
     {
-        // IMPORTANT: Avoid LINQ Count aggregate to sidestep emulator/serializer issues.
-        // Build filtered query only, then iterate pages and sum counts.
+        // For counts, do NOT apply ordering or paging to avoid emulator aggregate+order bug
         IQueryable<T> query = _container.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: false);
         if (spec.Criteria != null)
         {
             query = query.Where(spec.Criteria);
         }
-
-        var iterator = query.ToFeedIterator();
-        var total = 0;
-        while (iterator.HasMoreResults)
-        {
-            var page = await iterator.ReadNextAsync();
-            total += page.Count;
-        }
-        return total;
+        return await query.CountAsync();
     }
 }
