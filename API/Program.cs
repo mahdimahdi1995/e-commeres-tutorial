@@ -3,6 +3,7 @@ using Core.Entities;
 using Microsoft.Azure.Cosmos;
 using Microsoft.EntityFrameworkCore;
 using Core.Interfaces;
+using API.MiddleWare;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,6 +61,7 @@ builder.Services.AddSingleton(sp =>
 
 builder.Services.AddScoped<IProductRepository, ProductsRepository>();
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(CosmosGenericRepository<>));
+builder.Services.AddCors();
 
 // builder.Services.AddDbContext<StoreContext>(opt =>
 // {
@@ -68,13 +70,16 @@ builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(CosmosGenericRep
 
 
 var app = builder.Build();
-    
+
+// Configure the HTTP request pipeline.
+
+app.UseMiddleware<ExceptionMiddleWare>();
+
 using (var scope = app.Services.CreateScope())
 {
     var ctx = scope.ServiceProvider.GetRequiredService<StoreContext>();
     await ctx.Database.EnsureCreatedAsync();
 }
-// Configure the HTTP request pipeline.
 
 #region minimal-api
 // Minimal API endpoints to quickly test the DB connection (Cosmos via EF Core)
@@ -135,6 +140,10 @@ using (var scope = app.Services.CreateScope())
 // });
 #endregion
 
+app.UseCors(x => x
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+    .WithOrigins("http://localhost:4200", "https://localhost:4200"));
 // Keep attribute-routed controllers too (e.g., WeatherForecast)
 app.MapControllers();
 
