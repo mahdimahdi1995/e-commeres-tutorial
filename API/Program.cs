@@ -4,6 +4,8 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.EntityFrameworkCore;
 using Core.Interfaces;
 using API.MiddleWare;
+using StackExchange.Redis;
+using Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,6 +64,14 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddScoped<IProductRepository, ProductsRepository>();
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(CosmosGenericRepository<>));
 builder.Services.AddCors();
+builder.Services.AddSingleton<IConnectionMultiplexer>(config =>
+{
+    var connString = builder.Configuration.GetConnectionString("Redis")
+        ?? throw new Exception("Cannot get Redis connection string from configuration.");
+    var configuration = ConfigurationOptions.Parse(connString, true);
+    return ConnectionMultiplexer.Connect(configuration);
+});
+builder.Services.AddScoped<ICartService, CartService>();
 
 // builder.Services.AddDbContext<StoreContext>(opt =>
 // {

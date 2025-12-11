@@ -12,5 +12,14 @@ services:
     volumes:
       - cosmos_data:/data
     restart: unless-stopped
+  redis:
+    image: "redis:latest"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
 volumes:
+  redis_data:
   cosmos_data:
